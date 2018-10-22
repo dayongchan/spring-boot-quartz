@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>任务管理界面</title>
+    <link rel="stylesheet" th:href="@{/style.css}" type="text/css"></link>
+</head>
+<body>
+<h2>系统任务管理</h2>
+<div th:unless="${#lists.isEmpty(jobs)}">
+    <table>
+        <thead>
+        <tr>
+            <td colspan="5">任务列表</td>
+        </tr>
+        <tr>
+            <td width="30%">名称</td>
+            <td width="10%">状态</td>
+            <td width="30%">下次执行时间</td>
+            <td width="30%">上次执行时间</td>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="job : ${jobs}">
+            <td th:text="${job.jobName}">名称</td>
+            <td th:switch="${job.jobStatus}">
+                <a class="stateHref" href="javascript:void(0)" th:case="0" th:rel="${job.jobId}">启用</a>
+                <a class="stateHref" href="javascript:void(0)" th:case="1" th:rel="${job.jobId}">停止</a>
+            </td>
+            <td><a class="nextTimeHref" href="javascript:void(0)" th:rel="${job.jobId}" th:text="${job.nextTime}">下次执行时间</a></td>
+            <td th:text="${job.previousTime}">上次执行时间</td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+<div th:if="${#lists.isEmpty(jobs)}">
+    <p>系统还没配置调度的任务，请到表里面执行下面的SQL进行添加吧！</p>
+    <p>INSERT INTO `schedule`.`job_definition` (`job_id`, `cron_expression`, `description`, `is_concurrent`, `job_class`, `job_group`, `job_name`, `job_status`, `method_name`, `next_time`, `previous_time`, `spring_id`, `start_time`) VALUES ('1', '0/5 * * * * ?', '统计订单客单价数据的作业类[每5分钟一次]', '1', 'com.dayong.demo.springquartz.job.JobTest', 'order', 'task_order_amount_average_5m', '1', 'run', NULL, NULL, NULL, NULL);</p>
+</div>
+
+<script src="https://cdn.bootcss.com/jquery/3.3.1/jquery.min.js"></script>
+<script type="text/javascript">
+    $(function () {
+        $("body").on("click", ".stateHref", function () {
+            var jobId = $(this).attr("rel");
+            var jobStatus = $(this).text() == '启用' ? '1' : '0';
+            $.ajax(
+                {
+                    type: 'PUT',
+                    contentType: 'application/json',
+                    url: '/' + jobId + "/status?jobStatus=" + jobStatus,
+                    processData: false,
+                    dataType: 'json',
+                    success: function (result) {
+                        $("tbody tr").remove();
+                        buildTable(result);
+                    },
+                    error: function () {
+                        console.log('Err...');
+                    }
+                });
+        });
+
+        $("body").on("click", ".nextTimeHref", function () {
+            var jobId = $(this).parent().find("a").attr('rel');
+            $(this).parent().append($('<input type="text" value="' + $(this).text() + '" ><br/><a href="javascript:void(0)" class="updateLink" rel="'
+                + jobId + '">Apply</a>'));
+            $(this).hide();
+        });
+
+        $("body").on("click", ".updateLink", function () {
+            var jobId = $(this).attr("rel");
+            var date = $(this).parent().find("input[type=text]").val();
+            var $self = $(this);
+            var $a = $self.parent().find("a[class=nextTimeHref]");
+            $a.text(date);
+
+            $.ajax(
+                {
+                    type: 'PUT',
+                    contentType: 'application/json',
+                    url: '/' + jobId + "/date?date=" + date,
+                    processData: false,
+                    dataType: 'json',
+                    success: function (result) {
+                        $self.parent().find("input").remove();
+                        $a.show();
+                        $self.remove();
+                    },
+                    error: function () {
+                        console.log('Err...');
+                    }
+                });
+        });
+    });
+
+    function buildTable(data) {
+        if (Array.isArray(data) && data.length > 0) {
+            var $tbody = $('tbody');
+            var template;
+            $.each(data, function (idx, obj) {
+                template = '<tr><td>' + obj.jobName + '</td>'
+                    + '<td><a class="stateHref" href="javascript:void(0)" rel="' + obj.jobId + '">' + (obj.jobStatus == '0' ? '启用' : '停止') + '</a></td>'
+                    + '<td><a class="nextTimeHref" href="javascript:void(0)" rel="' + obj.jobId + '">' + obj.nextTime + '</a></td>'
+                    + '<td>' + obj.previousTime + '</td>'
+                    + '</tr>';
+                $tbody.append(template);
+            });
+        }
+    }
+</script>
+</body>
+</html>
